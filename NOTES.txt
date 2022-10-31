@@ -1,0 +1,20 @@
+####### USING "TRACEBACK" LIB #######
+
+import traceback
+
+def testExceptionWithTracebackLibrary():
+  try:
+    # division by zero raises an Exception
+    n = 2 / 0
+  except Exception as error:
+    #print(Exception, error)
+    traceback.print_exc() # print full stacktrace
+    #traceback.format.exc() # return full stacktrace string
+    #traceback.print_last()
+
+testExceptionWithTracebackLibrary()
+
+#OUTPUT:
+#Traceback (most recent call last):
+#  File "<stdin>", line 4, in testExceptionWithTracebackLibrary
+#ZeroDivisionError: division by zero

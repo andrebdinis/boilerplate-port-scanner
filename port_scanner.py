@@ -1,116 +1,80 @@
-import socket
-from common_ports import * # to assign the service name to a port
-import ipaddress # to validate ip address
-from urllib.request import urlopen # to validate url
-#import traceback # to print full traceback (if needed)
+import socket # look for open ports
+from common_ports import * # assign the service name to a port
+import ipaddress # validate ip address
+
+# Get Open Ports function (parameters):
+# - "target" is URL or IP
+# - "port_range" is list between two numbers '[1, 50]'
+# - "verbose" is optional parameter with default value as 'False'
 
 def get_open_ports(target, port_range, verbose=False):
-  # "target" is URL or IP
-  # "port_range" is list between two numbers '[1, 50]'
-  # "verbose" is optional parameter with default value as 'False'
-  print('##################### TEST ########################')
-  print('TARGET: ', target)
-  print('PORT_RANGE: ', port_range)
-  print('VERBOSE: ', verbose)
+  printGetOpenPortsInputLegend(target, port_range, verbose)
   
   open_ports = []
   url = None
   ip = None
   hostname = None
 
-  # Steps:
-
-  # 1. validate "target" (URL or IP)
-  # 1.0. Find out what to test first: the URL or the IP
+  # 1. validate "target" (try to get URL, IP and Hostname)
   # 1.1. If URL invalid, then "Error: Invalid hostname"
   # 1.2. If IP invalid, then "Error: Invalid IP address"
-  if target[:1].isalpha(): # test if first character is alphabet letter: [a-z]
-    url = validateURL(target)
-    if url:
-      hostname = url.split('/')[2]
-      try:
-        ip = socket.gethostbyname(hostname)
-      except Exception as e:
-        print("Exception: Could not find IP address for hostname {}".format(hostname))
-        return "Error: Invalid hostname"
-    else:
-      return "Error: Invalid hostname"
-  elif target[:1].isnumeric(): # test if first character is numeric: [0-9]
-    ip = validateIP(target)
-    if ip:
-      try:
-        res = socket.gethostbyaddr(ip)
-        if isinstance(res, tuple):
-          url = res[0]
-        else:
-          url = res
-        hostname = url.split('/')[2]
-      except Exception as e:
-        print("Exception: Could not find hostname for IP address {}".format(ip))
-        #print(Exception, e)
-    else:
-      return "Error: Invalid IP address"
+  data = validateTarget(target)
+  if isinstance(data, str): return data
   else:
-    return "Error: target is neither valid URL nor IP address"
-  
-  # 2. validate "port_range" (List of two numbers; 1st number must be <= than 2nd number)
-  port_interval = validatePortRange(port_range)
-  # 3. build list with open ports within the range
-  # Internet Address Family:
-  # 1. IPv4: socket.AF_INET
-  # 2. IPv6: socket.AF_INET6
-  # Socket Type:
-  # 1. TCP: socket.SOCK_STREAM
-  # 2. UDP: socket.SOCK_DGRAM
-  #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # default: (IPv4, TCP)
-  if url:
-    if hostname:
-      open_ports = portRangeScan(hostname, port_interval)
-    else:
-      open_ports = portRangeScan(url, port_interval)
-  elif ip:
-    open_ports = portRangeScan(ip, port_interval)
-  else:
-    return "Error: Neither url nor ip address were able to be tested"
+    url, ip, hostname = [data[i] for i in (0, 1, 2)]
 
-  # 4. validate "verbose" (if set to True, then returns descriptive text)
+  # 2. validate "port_range" (list of two numbers: 1st number must be <= 2nd number)
+  port_interval = validatePortRange(port_range)
+  
+  # 3. build list with open ports within the specified range
+  if url and hostname:
+    open_ports = portRangeScan(hostname, port_interval)
+  else:
+    open_ports = portRangeScan(ip, port_interval)
+
+  # 4. validate "verbose" (if 'True', then returns descriptive text)
   if verbose:
-    if url and ip:
-      if hostname:
-        return getVerboseString(hostname, ip, open_ports)
-      else:
-        return getVerboseString(url, ip, open_ports)
-    elif ip and not url:
-      return getVerboseString('', ip, open_ports)
+    if url and hostname:
+      return getVerboseString(hostname, ip, open_ports)
     else:
-      return "?????????"
+      return getVerboseString('', ip, open_ports)
   else:
     return open_ports
 
 ############### AUXILIARY FUNCTIONS ###############
 
+# Print Input
+def printGetOpenPortsInputLegend(target, port_range, verbose):
+  target_spacing = len(target) + 4
+  port_range_spacing = len(str(port_range)) + 4
+  verbose_spacing = 7
+  total = (target_spacing + port_range_spacing + verbose_spacing) + 4
+  print('|' + ' INPUT '.center(total, "-"))
+  print('|' + ' TARGET'.ljust(target_spacing) + 'PORT_RANGE'.ljust(port_range_spacing) + 'VERBOSE'.ljust(verbose_spacing))
+  print('|' + (' '+target).ljust(target_spacing) + str(port_range).ljust(port_range_spacing) + str(verbose).ljust(verbose_spacing))
+  print('|' + "-".center(total, "-"))
+
+# Validation
 def validateIP(ip_string):
   try:
     ip_object = ipaddress.ip_address(ip_string)
-    print("IP address '{ip_object}' valid".format(ip_object=ip_object))
+    print("IP address '{ip_object}' VALID".format(ip_object=ip_object))
     return ip_string
   except ValueError:
     print("IP address '{ip_string}' not valid".format(ip_string=ip_string))
     return False
 
-def testURL(url_string):
+def validateUrlFormat(url_string):
   URL = url_string[:]
-  error = None
-  if not URL.startswith("http://") and not URL.startswith("https://"): error = True
-  elif len(URL) == 0: error = True
-  elif len(URL.split('/')) < 3: error = True
-  if error: print('URL {} not valid'.format(URL)); return False
-  print('URL {} valid'.format(URL))
-  return URL
+  #if not URL.startswith("http://") and not URL.startswith("https://"): error = True
+  if (len(URL) == 0) or (len(URL.split('/')) < 3):
+    print('URL {} format not valid'.format(URL))
+    return False
+  else:
+    print('URL {} format VALID'.format(URL))
+    return URL
 
 def addUrlSchemeIfMissing(url_string): # return list of 1 url (original) or 2 url's with scheme
-  URL1 = None
-  URL2 = None
   cond1 = not url_string.startswith("http://")
   cond2 = not url_string.startswith("https://")
   if (cond1 and cond2):
@@ -123,12 +87,46 @@ def addUrlSchemeIfMissing(url_string): # return list of 1 url (original) or 2 ur
 
 def validateURL(url_string):
   URL_with_scheme = addUrlSchemeIfMissing(url_string)
-  URL = testURL(URL_with_scheme[0])
+  URL = validateUrlFormat(URL_with_scheme[0])
   if URL: return URL
   if len(URL_with_scheme) == 2:
-    URL = testURL(URL_with_scheme[1])
+    URL = validateUrlFormat(URL_with_scheme[1])
     if URL: return URL
   return False
+
+def validateTarget(target):
+  if target[:1].isalpha(): # test if first character is alphabet letter: [a-z]
+    url = validateURL(target)
+    if url:
+      hostname = url.split('/')[2]
+      try:
+        ip = socket.gethostbyname(hostname)
+        return [url, ip, hostname]
+      except Exception as e:
+        print("Exception: Could not find IP address for hostname {}".format(hostname))
+        print("Error: Invalid hostname")
+        return "Error: Invalid hostname"
+    else:
+      return "Error: Invalid hostname"
+  elif target[:1].isnumeric(): # test if first character is numeric: [0-9]
+    ip = validateIP(target)
+    if ip:
+      try:
+        res = socket.gethostbyaddr(ip)
+        if isinstance(res, tuple):
+          url = res[0]
+          hostname = url
+        else:
+          url = res
+          hostname = url.split('/')[2]
+        return [url, ip, hostname]
+      except Exception as e:
+        print("Exception: Could not find hostname for IP address {}".format(ip))
+        return [None, ip, None]
+    else:
+      return "Error: Invalid IP address"
+  else:
+    return "Error: target is neither valid URL nor IP address"
 
 def validatePortRange(port_range):
   try:
@@ -146,11 +144,16 @@ def validatePortRange(port_range):
   except Error:
     return False
 
+
+# Port Scan
 def portScan(host, port):
-  try:
-    #con = socketI.connect_ex((host, port))
-    s = socket.socket()
-    s.settimeout(0.5)
+  # socket.socket(internet_address_family, socket_type):
+  # - Internet Address Family: (IPv4: socket.AF_INET | IPv6: socket.AF_INET6)
+  # - Socket Type: (TCP: socket.SOCK_STREAM | UDP: socket.SOCK_DGRAM)
+  try:    
+    #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # means (IPv4, TCP)
+    s = socket.socket() # this code is equal to the line above:
+    s.settimeout(0.25)
     con = s.connect_ex((host, port))
     if con:
       print("Port {port} is closed".format(port=port))
@@ -176,50 +179,28 @@ def portRangeScan(host, port_range):
       open_ports.append(port)
   return open_ports
 
+
+# Verbose
 def getServiceNameByPort(port):
   service = ports_and_services.get(port)
   if not service: return ""
   else: return service
 
-def justTitle(str_a):
+def justifyTitle(str_a):
   return str_a.ljust(9, " ")
   
 def getVerboseString(url, ip, open_ports):
   verbose = ''
   title = 'Open ports for '
-  subtitle = justTitle("PORT") + "SERVICE"
+  subtitle = justifyTitle("PORT") + "SERVICE"
   if url and ip:
     title += "{URL} ({IP})".format(URL=url, IP=ip)
-  elif ip and not url:
-    title += "{IP}".format(IP=ip)
   else:
-    raise Exception("not ip nor url????")
+    title += "{IP}".format(IP=ip)
   verbose += title + "\n" + subtitle
   for port in open_ports:
-    port_ljust = justTitle(str(port))
+    port_ljust = justifyTitle(str(port))
     service_name = getServiceNameByPort(port)
     verbose += "\n" + port_ljust + service_name
   print(verbose)
   return verbose
-
-
-
-
-# URL BUGGED TESTING
-def testURL_v1(url_string):
-  URL = url_string[:]
-  try:
-    res = urlopen(URL)
-    if res.status == 200 and res.msg == 'OK':
-      print('URL {} is valid'.format(URL))
-      return URL
-    else:
-      print('URL {} is not valid'.format(URL))
-      return False
-  except Exception as error:
-    print('URL {} is not valid'.format(URL))
-    return False
-    #print(Exception, error)
-    #traceback.print_exc() # print full stacktrace
-    #traceback.format.exc() # return full stacktrace string
-    #traceback.print_last()
